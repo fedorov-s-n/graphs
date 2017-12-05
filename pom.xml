@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.github.fedorov-s-n.graphs</groupId>
+    <artifactId>graphs</artifactId>
+    <version>1.0</version>
+    <packaging>jar</packaging>
+    <name>Graphs</name>
+    <description>Graph library with functional-like API</description>
+    <url>https://github.com/fedorov-s-n/graphs</url>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://github.com/fedorov-s-n/graphs/blob/master/LICENSE</url>
+            <distribution>sources</distribution>
+        </license>
+    </licenses>
+    <scm>
+        <url>https://github.com/fedorov-s-n/graphs</url>
+        <connection>scm:git:git://github.com/fedorov-s-n/graphs.git</connection>
+        <developerConnection>scm:git:git@github.com:fedorov-s-n/graphs.git</developerConnection>
+    </scm>
+    <developers>
+        <developer>
+            <email>fedorov.s.n@mail.ru</email>
+            <name>Sergey N. Fedorov</name>
+            <url>https://github.com/fedorov-s-n</url>
+            <id>fedorov-s-n</id>
+        </developer>
+    </developers>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>net.sf.jung</groupId>
+            <artifactId>jung-visualization</artifactId>
+            <version>2.0.1</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.sf.jung</groupId>
+            <artifactId>jung-graph-impl</artifactId>
+            <version>2.0.1</version>
+            <scope>compile</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>2.4</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>2.10.3</version>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
