@@ -312,20 +312,34 @@ public final class Graph<V, E> implements Cloneable {
      * @return new graph with topologically sorted vertices or null if this graph has cycles
      */
     public Graph<V, E> topsort() {
-        ArrayDeque<Vertex<V, E>> order = new ArrayDeque<>(vertices.size());
-        boolean[] added = new boolean[vertices.size()];
+        int size = vertices.size();
+        AtomicInteger index = new AtomicInteger(size);
+        int[] order = new int[size];
+        boolean[] added = new boolean[size];
         Vertex<V, E> cycleMarker = dfs(
             vertices,
             Vertex::getChildNodes,
             null,
             v -> (added[v.index] = true) && v.getChildNodes().anyMatch(c -> added[c.index]),
-            node -> !order.offerFirst(node),
+            node -> (order[node.index] = index.decrementAndGet()) < 0,
             null
         );
         if (cycleMarker != null) return null;
-        List<Vertex<V, E>> vertices2 = new ArrayList<>(order);
-        List<Edge<V, E>> edges2 = filterEdges(any -> true, vertices2);
-        return new Graph<>(vertices2, edges2);
+
+        @SuppressWarnings("unchecked")
+        Vertex<V, E>[] vertices2 = new Vertex[size];
+        for (int i = 0; i < size; ++i) {
+            Vertex<V, E> vertex = new Vertex<>(vertices.get(i).parameter);
+            vertex.index = order[i];
+            vertices2[order[i]] = vertex;
+        }
+        List<Edge<V, E>> edges2 = edges()
+            .map(e -> new Edge<>(
+                vertices2[order[e.parent.index]],
+                vertices2[order[e.child.index]],
+                e.parameter))
+            .collect(Collectors.toList());
+        return new Graph<>(Arrays.asList(vertices2), edges2);
     }
 
     /**
