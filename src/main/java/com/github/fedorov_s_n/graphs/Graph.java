@@ -1,19 +1,6 @@
 package com.github.fedorov_s_n.graphs;
 
-import edu.uci.ics.jung.algorithms.layout.FRLayout;
-import edu.uci.ics.jung.algorithms.layout.Layout;
-import edu.uci.ics.jung.graph.SparseMultigraph;
-import edu.uci.ics.jung.graph.util.EdgeType;
-import edu.uci.ics.jung.visualization.DefaultVisualizationModel;
-import edu.uci.ics.jung.visualization.GraphZoomScrollPane;
-import edu.uci.ics.jung.visualization.VisualizationModel;
-import edu.uci.ics.jung.visualization.VisualizationViewer;
-import edu.uci.ics.jung.visualization.control.DefaultModalGraphMouse;
-import edu.uci.ics.jung.visualization.control.ModalGraphMouse;
-import edu.uci.ics.jung.visualization.decorators.ToStringLabeller;
-import edu.uci.ics.jung.visualization.renderers.GradientVertexRenderer;
-import edu.uci.ics.jung.visualization.renderers.VertexLabelAsShapeRenderer;
-import org.apache.commons.collections15.Transformer;
+import com.github.fedorov_s_n.graphs.representation.JPanelRepresentation;
 
 import javax.swing.*;
 import java.awt.*;
@@ -25,13 +12,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.groupingBy;
 
 /**
  * Directed graph with parametrized vertices and edges. Graph is supposed to be
- * effectively immutable though it's possible to mutate it.
+ * effectively immutable though it's possible to mutate vertices and edges lists.
  *
  * @param <V> type of vertices parameters
  * @param <E> type of edges parameters
@@ -51,8 +39,14 @@ public final class Graph<V, E> implements Cloneable {
      *
      * @param edges list of edges
      */
-    public Graph(List<Edge<V, E>> edges) {
-        this(null, edges);
+    public static <V, E> Graph<V, E> fromEdges(List<Edge<V, E>> edges) {
+        List<Vertex<V, E>> vertices = new ArrayList<>();
+        edges.stream().flatMap(e -> Stream.of(e.parent, e.child)).forEach(v -> v.index = 0);
+        for (Edge<V, E> edge : edges) {
+            if (edge.parent.index++ == 0) vertices.add(edge.parent);
+            if (edge.child.index++ == 0) vertices.add(edge.child);
+        }
+        return new Graph<>(vertices, edges);
     }
 
     /**
@@ -67,15 +61,7 @@ public final class Graph<V, E> implements Cloneable {
      */
     public Graph(List<Vertex<V, E>> vertices, List<Edge<V, E>> edges) {
         this.edges = Objects.requireNonNull(edges);
-        if (vertices == null) {
-            vertices = new ArrayList<>();
-            edges.stream().flatMap(e -> Stream.of(e.parent, e.child)).forEach(v -> v.index = 0);
-            for (Edge<V, E> edge : edges) {
-                if (edge.parent.index++ == 0) vertices.add(edge.parent);
-                if (edge.child.index++ == 0) vertices.add(edge.child);
-            }
-        }
-        this.vertices = vertices;
+        this.vertices = Objects.requireNonNull(vertices);
         int index = 0;
         for (Vertex<V, E> vertex : vertices) {
             vertex.children = vertex.parents = null;
@@ -87,6 +73,44 @@ public final class Graph<V, E> implements Cloneable {
         edges.stream()
             .collect(groupingBy(e -> e.child.index))
             .forEach((i, l) -> this.vertices.get(i).parents = l);
+    }
+
+    /**
+     * Get count of vertices in this graph
+     *
+     * @return count of vertices
+     */
+    public int verticesCount() {
+        return vertices.size();
+    }
+
+    /**
+     * Get count of edges in this graph
+     *
+     * @return count of edges
+     */
+    public int edgesCount() {
+        return edges.size();
+    }
+
+    /**
+     * Checks if this graph contains vertex with specific parameter
+     *
+     * @param value vertex parameter value
+     * @return true if this graph contains vertex with the parameter specified, false otherwise
+     */
+    public boolean contains(V value) {
+        return vertices().anyMatch(v -> Objects.equals(v.getParameter(), value));
+    }
+
+    /**
+     * Checks if this graph contains edge with specific parameter
+     *
+     * @param value edge parameter value
+     * @return true if this graph contains edge with the parameter specified, false otherwise
+     */
+    public boolean containsEdge(E value) {
+        return edges().anyMatch(e -> Objects.equals(e.getParameter(), value));
     }
 
     /**
@@ -206,7 +230,7 @@ public final class Graph<V, E> implements Cloneable {
 
     /**
      * Creates new graph that has vertices of this graph if parameter is
-     * instance of specified class. Edges are changed accordingly, ruled by
+     * instance of specified class or null. Edges are changed accordingly, ruled by
      * onRemove function. All vertices and edges are actually new objects, not
      * shared with this graph.
      *
@@ -249,6 +273,39 @@ public final class Graph<V, E> implements Cloneable {
     }
 
     /**
+     * Creates new graph with all the vertices and edges except vertices parametrized by specified value.
+     *
+     * @param parameter value to filter out vertices
+     * @return new graph
+     */
+    public Graph<V, E> remove(V parameter) {
+        return filter(v -> !Objects.equals(v.getParameter(), parameter));
+    }
+
+    /**
+     * Creates new graph with all the vertices and edges except edges parametrized by specified value.
+     *
+     * @param parameter value to filter out edges
+     * @return new graph
+     */
+    public Graph<V, E> removeEdges(E parameter) {
+        return filterEdges(e -> !Objects.equals(e.getParameter(), parameter));
+    }
+
+    /**
+     * Inverts edges
+     *
+     * @return new graph with inverted edges
+     */
+    public Graph<V, E> invert() {
+        List<Vertex<V, E>> verticesCopy = copyVertices();
+        List<Edge<V, E>> edgesCopy = edges()
+            .map(e -> new Edge<>(verticesCopy.get(e.child.index), verticesCopy.get(e.parent.index), e.parameter))
+            .collect(Collectors.toList());
+        return new Graph<V, E>(verticesCopy, edgesCopy);
+    }
+
+    /**
      * Creates new graph with distinct parameter values.
      * Edges to different vertices that have the same parameter in this graph will link to single vertex
      * in returned graph.
@@ -264,7 +321,7 @@ public final class Graph<V, E> implements Cloneable {
             list.forEach(v -> newArray[v.index] = newVertex);
             uniqueVertices.add(newVertex);
         });
-        List<Edge<V, E>> edgesList = filterEdges(any -> true, Arrays.asList(newArray));
+        List<Edge<V, E>> edgesList = copyEdges(Arrays.asList(newArray));
         return new Graph<>(uniqueVertices, edgesList);
     }
 
@@ -275,12 +332,12 @@ public final class Graph<V, E> implements Cloneable {
      * @return new graph with unique edges
      */
     public Graph<V, E> distinctEdges() {
-        List<Vertex<V, E>> newVertices = filterVertices(any -> true);
-        List<Edge<V, E>> newEdges = new ArrayList<>();
-        edges().collect(groupingBy(e -> e.parent.index, groupingBy(e -> e.child.index, groupingBy(e -> e.parameter))))
-            .forEach((parent, m1) -> m1.forEach((child, m2) -> m2.forEach((parameter, list) -> {
-                newEdges.add(new Edge<>(newVertices.get(parent), newVertices.get(child), parameter));
-            })));
+        List<Vertex<V, E>> newVertices = copyVertices();
+        List<Edge<V, E>> newEdges = edges()
+            .map(DistinctEdge::new)
+            .distinct()
+            .map(e -> e.toEdge(newVertices))
+            .collect(Collectors.toList());
         return new Graph<>(newVertices, newEdges);
     }
 
@@ -314,32 +371,24 @@ public final class Graph<V, E> implements Cloneable {
     public Graph<V, E> topsort() {
         int size = vertices.size();
         AtomicInteger index = new AtomicInteger(size);
-        int[] order = new int[size];
+        int[] indexes = new int[size];
         boolean[] added = new boolean[size];
         Vertex<V, E> cycleMarker = dfs(
             vertices,
             Vertex::getChildNodes,
             null,
             v -> (added[v.index] = true) && v.getChildNodes().anyMatch(c -> added[c.index]),
-            node -> (order[node.index] = index.decrementAndGet()) < 0,
+            node -> (indexes[index.decrementAndGet()] = node.index) < 0, // always false
             null
         );
         if (cycleMarker != null) return null;
 
-        @SuppressWarnings("unchecked")
-        Vertex<V, E>[] vertices2 = new Vertex[size];
-        for (int i = 0; i < size; ++i) {
-            Vertex<V, E> vertex = new Vertex<>(vertices.get(i).parameter);
-            vertex.index = order[i];
-            vertices2[order[i]] = vertex;
-        }
-        List<Edge<V, E>> edges2 = edges()
-            .map(e -> new Edge<>(
-                vertices2[order[e.parent.index]],
-                vertices2[order[e.child.index]],
-                e.parameter))
+        List<Vertex<V, E>> copy = copyVertices();
+        List<Vertex<V, E>> sorted = IntStream
+            .range(0, size)
+            .mapToObj(i -> copy.get(indexes[i]))
             .collect(Collectors.toList());
-        return new Graph<>(Arrays.asList(vertices2), edges2);
+        return new Graph<>(sorted, copyEdges(copy));
     }
 
     /**
@@ -370,12 +419,18 @@ public final class Graph<V, E> implements Cloneable {
         Consumer<Vertex<V, E>> onExit) {
         Predicate<Vertex<V, E>> onStartFunc = onStart == null ? v -> false : onStart;
         Predicate<Vertex<V, E>> onFinishFunc = onFinish == null ? v -> false : onFinish;
-        Color[] colors = new Color[vertices.size()];
+        int size = vertices.size();
+        Color[] colors = new Color[size];
         Arrays.fill(colors, Color.white);
+        int[] iterators = new int[size];
+        int[][] children = IntStream
+            .range(0, size)
+            .mapToObj(i -> upd.apply(vertices.get(i)).mapToInt(v -> v.index).toArray())
+            .toArray(int[][]::new);
         for (Vertex<V, E> node : startNodes) {
             if (colors[node.index] != Color.white) continue;
             if (onEnter != null) onEnter.accept(node);
-            Vertex<V, E> ret = dfs(node, upd, colors, onStartFunc, onFinishFunc);
+            Vertex<V, E> ret = dfs(node, onStartFunc, onFinishFunc, colors, children, iterators);
             if (onExit != null) onExit.accept(node);
             if (ret != null) return ret;
         }
@@ -389,63 +444,13 @@ public final class Graph<V, E> implements Cloneable {
      * @return this graph
      */
     public Graph<V, E> visualize() {
-        edu.uci.ics.jung.graph.Graph<Vertex<V, E>, Edge<V, E>> graph;
-        VisualizationViewer<Vertex<V, E>, Edge<V, E>> vv;
-        Layout<Vertex<V, E>, Edge<V, E>> layout;
         JFrame frame = new JFrame();
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
         frame.setVisible(true);
         JPanel panel = new JPanel(new BorderLayout());
         frame.setContentPane(panel);
-        graph = new SparseMultigraph<>();
-        vertices.forEach(graph::addVertex);
-        edges.forEach(ref -> graph.addEdge(ref, ref.parent, ref.child, EdgeType.DIRECTED));
-        layout = new FRLayout<>(graph);
-        DisplayMode displayMode = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDisplayMode();
-        Dimension preferredSize = new Dimension(displayMode.getWidth(), displayMode.getHeight());
-        final VisualizationModel<Vertex<V, E>, Edge<V, E>> visualizationModel
-            = new DefaultVisualizationModel<>(layout, preferredSize);
-        vv = new VisualizationViewer<>(visualizationModel, preferredSize);
-        GraphZoomScrollPane gzsp = new GraphZoomScrollPane(vv);
-        panel.add(gzsp);
-        // this class will provide both label drawing and vertex shapes
-        VertexLabelAsShapeRenderer<Vertex<V, E>, Edge<V, E>> vlasr
-            = new VertexLabelAsShapeRenderer<>(vv.getRenderContext());
-        // customize the render context
-        vv.getRenderContext().setVertexLabelTransformer(node
-            -> "<html><center>" + node + "</center></html>");
-        vv.getRenderContext().setVertexShapeTransformer(vlasr);
-        vv.getRenderer().setVertexRenderer(new GradientVertexRenderer<>(
-            java.awt.Color.LIGHT_GRAY, java.awt.Color.white, false));
-        vv.getRenderer().setVertexLabelRenderer(vlasr);
-        java.awt.Color[] colors = Stream
-            .of("#000000", "#0000cc", "#006600", "#cc0000", "#660066", "#994400")
-            .map(java.awt.Color::decode)
-            .toArray(java.awt.Color[]::new);
-        AtomicInteger colorCounter = new AtomicInteger();
-        Map<Class, java.awt.Color> colorMap = edges.stream()
-            .map(e -> e.parameter == null ? null : e.parameter.getClass())
-            .distinct()
-            .sorted(Comparator.nullsFirst(Comparator.comparing(Class::getName)))
-            .collect(Collectors.toMap(
-                Function.identity(),
-                s -> colors[colorCounter.getAndIncrement() % colors.length]
-            ));
-
-        Transformer<Edge<V, E>, Paint> colorer = e
-            -> colorMap.get(e.parameter == null ? null : e.parameter.getClass());
-        vv.getRenderContext().setEdgeDrawPaintTransformer(colorer);
-        vv.getRenderContext().setArrowDrawPaintTransformer(colorer);
-        vv.getRenderContext().setArrowFillPaintTransformer(colorer);
-
-        vv.getRenderContext().setEdgeLabelTransformer(ref
-            -> ref.parameter == null ? null : ref.parameter.toString());
-        vv.setBackground(java.awt.Color.white);
-        vv.setVertexToolTipTransformer(new ToStringLabeller<>());
-        final DefaultModalGraphMouse graphMouse = new DefaultModalGraphMouse();
-        graphMouse.setMode(ModalGraphMouse.Mode.PICKING);
-        vv.setGraphMouse(graphMouse);
+        panel.add(new JPanelRepresentation<V, E>().represent(this));
         frame.pack();
         frame.repaint();
         CountDownLatch latch = new CountDownLatch(1);
@@ -652,19 +657,20 @@ public final class Graph<V, E> implements Cloneable {
         return graphs;
     }
 
+    private List<Vertex<V, E>> copyVertices() {
+        return vertices().map(v -> new Vertex<V, E>(v.parameter)).collect(Collectors.toList());
+    }
+
     private List<Vertex<V, E>> filterVertices(Predicate<Vertex<V, E>> filter) {
-        int size = vertices.size();
-        @SuppressWarnings("unchecked")
-        Vertex<V, E>[] array = new Vertex[size];
-        for (Vertex<V, E> oldVertex : vertices) {
-            Vertex<V, E> newVertex = null;
-            if (filter.test(oldVertex)) {
-                newVertex = new Vertex<>(oldVertex.parameter);
-                newVertex.index = oldVertex.index;
-            }
-            array[oldVertex.index] = newVertex;
-        }
-        return Arrays.asList(array);
+        return vertices()
+            .map(v -> filter.test(v) ? new Vertex<V, E>(v.parameter) : null)
+            .collect(Collectors.toList());
+    }
+
+    private List<Edge<V, E>> copyEdges(List<Vertex<V, E>> vertices) {
+        return edges()
+            .map(e -> new Edge<>(vertices.get(e.parent.index), vertices.get(e.child.index), e.parameter))
+            .collect(Collectors.toList());
     }
 
     private List<Edge<V, E>> filterEdges(Predicate<Edge<V, E>> filter, List<Vertex<V, E>> vertices) {
@@ -679,31 +685,38 @@ public final class Graph<V, E> implements Cloneable {
         return edges2;
     }
 
-    private Vertex<V, E> dfs(Vertex<V, E> v, Function<Vertex<V, E>, Stream<Vertex<V, E>>> upd, Color[] colors,
-                             Predicate<Vertex<V, E>> onStart, Predicate<Vertex<V, E>> onFinish) {
+    private Vertex<V, E> dfs(Vertex<V, E> v, Predicate<Vertex<V, E>> onStart, Predicate<Vertex<V, E>> onFinish,
+                             Color[] colors, int[][] children, int[] iterators) {
         Stack<Vertex<V, E>> pending = new Stack<>();
         Vertex<V, E> node = v;
         pending.add(node);
         while (!pending.isEmpty()) {
             node = pending.peek();
-            switch (colors[node.index]) {
+            int index = node.index;
+            switch (colors[index]) {
                 case white:
-                    colors[node.index] = Color.gray;
+                    colors[index] = Color.gray;
                     if (onStart.test(node)) {
                         return node;
                     }
                 case gray:
-                    Optional<Vertex<V, E>> optional = upd.apply(node)
-                        .filter(n -> colors[n.index] == Color.white)
-                        .findAny();
-                    if (optional.isPresent()) {
-                        pending.push(optional.get());
-                    } else {
+                    int[] childrenArray = children[index];
+                    int childrenCount = childrenArray.length;
+                    boolean finished = true;
+                    while (iterators[index] < childrenCount) {
+                        Vertex<V, E> child = vertices.get(childrenArray[iterators[index]++]);
+                        if (colors[child.index] == Color.white) {
+                            pending.push(child);
+                            finished = false;
+                            break;
+                        }
+                    }
+                    if (finished) {
                         if (onFinish.test(node)) {
                             return node;
                         }
                         pending.pop();
-                        colors[node.index] = Color.black;
+                        colors[index] = Color.black;
                     }
                     break;
                 case black:
@@ -716,5 +729,41 @@ public final class Graph<V, E> implements Cloneable {
 
     private enum Color {
         white, gray, black
+    }
+
+    private static class DistinctEdge<E> {
+        private final int parentIndex;
+        private final int childIndex;
+        private final E parameter;
+
+        DistinctEdge(Edge<?, E> edge) {
+            parentIndex = edge.parent.index;
+            childIndex = edge.child.index;
+            parameter = edge.parameter;
+        }
+
+        <V> Edge<V, E> toEdge(List<Vertex<V, E>> vertices) {
+            return new Edge<V, E>(vertices.get(parentIndex), vertices.get(childIndex), parameter);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            DistinctEdge<?> that = (DistinctEdge<?>) o;
+
+            if (parentIndex != that.parentIndex) return false;
+            if (childIndex != that.childIndex) return false;
+            return parameter != null ? parameter.equals(that.parameter) : that.parameter == null;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = parentIndex;
+            result = 31 * result + childIndex;
+            result = 31 * result + (parameter != null ? parameter.hashCode() : 0);
+            return result;
+        }
     }
 }
