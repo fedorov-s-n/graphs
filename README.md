@@ -20,5 +20,5 @@ Artifacts are available at maven central
     <dependency>
         <groupId>com.github.fedorov-s-n.graphs</groupId>
         <artifactId>graphs</artifactId>
-        <version>1.0</version>
+        <version>1.0.1</version>
     </dependency>
