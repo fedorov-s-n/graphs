@@ -3,11 +3,9 @@ package com.github.fedorov_s_n.graphs;
 import com.github.fedorov_s_n.graphs.representation.JPanelRepresentation;
 
 import javax.swing.*;
-import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.*;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
@@ -73,6 +71,15 @@ public final class Graph<V, E> implements Cloneable {
         edges.stream()
             .collect(groupingBy(e -> e.child.index))
             .forEach((i, l) -> this.vertices.get(i).parents = l);
+    }
+
+    /**
+     * Get count of vertices in this graph
+     *
+     * @return count of vertices
+     */
+    public int size() {
+        return vertices.size();
     }
 
     /**
@@ -202,7 +209,7 @@ public final class Graph<V, E> implements Cloneable {
     public Graph<V, E> filter(Predicate<Vertex<V, E>> vertexPredicate, Predicate<Edge<V, E>> edgePredicate) {
         List<Vertex<V, E>> vertices2 = filterVertices(vertexPredicate);
         List<Edge<V, E>> edges2 = filterEdges(edgePredicate, vertices2);
-        return new Graph<>(vertices2, edges2);
+        return new Graph<>(notNull(vertices2), edges2);
     }
 
     /**
@@ -264,12 +271,12 @@ public final class Graph<V, E> implements Cloneable {
         edges2.addAll(vertices.stream()
             .filter(v -> vertices2.get(v.index) == null)
             .flatMap(v -> v.getParentEdges().flatMap(p -> v.getChildEdges().map(c -> new Edge<>(
-                p.parent,
-                c.child,
+                vertices2.get(p.parent.index),
+                vertices2.get(c.child.index),
                 merger.apply(p.parameter, c.parameter)))))
             .filter(edgePredicate)
             .collect(Collectors.toList()));
-        return new Graph<>(vertices2, edges2);
+        return new Graph<>(notNull(vertices2), edges2);
     }
 
     /**
@@ -448,9 +455,7 @@ public final class Graph<V, E> implements Cloneable {
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
         frame.setVisible(true);
-        JPanel panel = new JPanel(new BorderLayout());
-        frame.setContentPane(panel);
-        panel.add(new JPanelRepresentation<V, E>().represent(this));
+        frame.setContentPane(new JPanelRepresentation<V, E>().represent(this));
         frame.pack();
         frame.repaint();
         CountDownLatch latch = new CountDownLatch(1);
@@ -484,20 +489,18 @@ public final class Graph<V, E> implements Cloneable {
         builder.append("nodes:\n");
         for (Vertex vertex : vertices) {
             builder.append(String.format(
-                "(%d,\t%s:%s)%n",
+                "(%d,\t%s)%n",
                 vertex.index,
-                vertex.toString(),
-                vertex.parameter == null ? "null" : vertex.parameter.getClass()
+                vertex.parameter
             ));
         }
         builder.append("references:\n");
         for (Edge ref : edges) {
             builder.append(String.format(
-                "(%d,\t%d,\t%s:%s)%n",
+                "(%d,\t%d,\t%s)%n",
                 ref.parent.index,
                 ref.child.index,
-                ref.toString(),
-                ref.parameter == null ? "null" : ref.parameter.getClass()
+                ref.parameter
             ));
         }
         return builder.toString();
@@ -683,6 +686,10 @@ public final class Graph<V, E> implements Cloneable {
             }
         }
         return edges2;
+    }
+
+    private <T> List<T> notNull(List<T> list) {
+        return list.stream().filter(Objects::nonNull).collect(Collectors.toList());
     }
 
     private Vertex<V, E> dfs(Vertex<V, E> v, Predicate<Vertex<V, E>> onStart, Predicate<Vertex<V, E>> onFinish,
