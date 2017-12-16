@@ -4,6 +4,8 @@ import com.github.fedorov_s_n.graphs.representation.TestGraphRepresentation
 import spock.lang.Specification
 import spock.lang.Unroll
 
+import java.util.stream.Collectors
+
 class GraphTest extends Specification {
 
     private final TestGraphRepresentation parser = new TestGraphRepresentation();
@@ -63,6 +65,21 @@ class GraphTest extends Specification {
         "split"      | "1"                        | ["1"]
         "splitEdges" | "1->2->3->4->2"            | ["1", "2->3->4->2"]
         "splitEdges" | "1->2->3->5->6->5,3->4->2" | ["1", "5->6->5", "2->3->4->2"]
+    }
 
+    def "topsort(#input) -> (#output)"() {
+        expect:
+        def graph = parser.restore(input).topsort()
+        if (output == null) {
+            assert graph == null
+        } else {
+            assert graph != null
+            assert graph.vertices().map({ it.parameter.toString() }).collect(Collectors.joining()) == output
+        }
+        where:
+        input              | output
+        "4->3->2->1"       | "4321"
+        "1->2->1"          | null
+        "1->2, 1->2, 1->2" | "12"
     }
 }

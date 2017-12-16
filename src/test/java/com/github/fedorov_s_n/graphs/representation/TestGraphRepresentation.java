@@ -18,7 +18,14 @@ public class TestGraphRepresentation implements GraphRestorableRepresentation<St
 
     @Override
     public String represent(Graph<Integer, Integer> graph) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        StringBuilder builder = new StringBuilder();
+        graph.edges().forEach(e -> {
+            if (builder.length() != 0) builder.append(", ");
+            builder.append(e.getParent().getParameter());
+            builder.append("->");
+            builder.append(e.getChild().getParameter());
+        });
+        return builder.toString();
     }
 
     @Override

@@ -385,8 +385,8 @@ public final class Graph<V, E> implements Cloneable {
             Vertex::getChildNodes,
             null,
             v -> (added[v.index] = true) && v.getChildNodes().anyMatch(c -> added[c.index]),
-            node -> (indexes[index.decrementAndGet()] = node.index) < 0, // always false
-            null
+            v -> (indexes[index.decrementAndGet()] = v.index) < 0, // always false
+            v -> Arrays.fill(added, false)
         );
         if (cycleMarker != null) return null;
 
