@@ -67,6 +67,7 @@ class GraphTest extends Specification {
         "splitEdges" | "1->2->3->5->6->5,3->4->2" | ["1", "5->6->5", "2->3->4->2"]
     }
 
+    @Unroll
     def "topsort(#input) -> (#output)"() {
         expect:
         def graph = parser.restore(input).topsort()
